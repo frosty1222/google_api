@@ -1,7 +1,7 @@
 const userRouter = require('./user');
-const googleService = require('./googleService');
+const googleServiceSpredSheetApi = require('./googleServiceSpredSheetApi');
 function route(app) {
   app.use('/api/user',userRouter);
-  app.use('/api/google-service',googleService);
+  app.use('/api/google-service-spredsheet-api',googleServiceSpredSheetApi);
 }
 module.exports = route;

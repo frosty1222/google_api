@@ -1,115 +1,16 @@
 const { google } = require("googleapis");
-const { MongoClient } = require("mongodb");
-const fs = require("fs");
-const path = require("path");
 const User = require("../models/User");
+const AvailableSheet = require("../models/AvailableSheet");
+const BaseAuth = require("./BaseAuth");
 
-class GoogleService {
+class GoogleServiceSpredSheetApi{
   constructor() {
-    this.SCOPES = [
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/spreadsheets",
-    ];
-    this.TOKEN_PATH = path.join(__dirname, "token.json");
-    this.CREDENTIALS_PATH = path.join(__dirname, "credentials.json");
+    this.baseAuth = BaseAuth;
+    this.sheetId = 0;
     this.spreadsheetId = "1FgDGAAL2PLAliyX3S2QcQuYdBKfmtTDqH8FX3IxKHQw";
-    this.auth = null;
     this.saveToMongo = this.saveToMongo.bind(this);
     this.updateMongoData = this.updateMongoData.bind(this);
-    this.sheetId = 0;
     this.getSheetByRange = this.getSheetByRange.bind(this);
-  }
-
-  authorize = async (req, res) => {
-    try {
-      const CREDENTIALS_PATH = this.CREDENTIALS_PATH;
-      const content = fs.readFileSync(CREDENTIALS_PATH);
-      const credentials = JSON.parse(content);
-      const { client_secret, client_id, redirect_uris } = credentials.web;
-      const oAuth2Client = new google.auth.OAuth2(
-        client_id,
-        client_secret,
-        redirect_uris[0]
-      );
-      if (fs.existsSync(this.TOKEN_PATH)) {
-        const token = fs.readFileSync(this.TOKEN_PATH);
-        const tokenData = JSON.parse(token);
-        oAuth2Client.setCredentials({
-          access_token: tokenData.tokens.access_token,
-          refresh_token: tokenData.tokens.refresh_token,
-        });
-        this.auth = oAuth2Client;
-        // return res.status(201).json({
-        //   token:JSON.parse(token)
-        // });
-      } else {
-        return this.getNewToken(oAuth2Client, res);
-      }
-    } catch (error) {
-      return res.status(500).json({
-        error: error,
-      });
-    }
-  };
-  callback = async (req, res) => {
-    const { code } = req.query;
-
-    try {
-      const CREDENTIALS_PATH = this.CREDENTIALS_PATH;
-      const content = fs.readFileSync(CREDENTIALS_PATH);
-      const credentials = JSON.parse(content);
-      const { client_id, client_secret, redirect_uris } = credentials.web;
-      if (!client_id)
-        return res.json({
-          error: "client id is not existing",
-        });
-      const oAuth2Client = new google.auth.OAuth2(
-        client_id,
-        client_secret,
-        redirect_uris[0]
-      );
-      const tokens = await oAuth2Client.getToken(code);
-      const tokenData = JSON.parse(token);
-      oAuth2Client.setCredentials({
-        access_token: tokenData.tokens.access_token,
-        refresh_token: tokenData.tokens.refresh_token,
-      });
-
-      // Save token to token.json file
-      fs.writeFileSync(this.TOKEN_PATH, JSON.stringify(tokens));
-      this.auth = oAuth2Client;
-
-      return res.json({
-        data: oAuth2Client,
-      });
-    } catch (error) {
-      console.error("Error retrieving access token", error);
-      return res.status(500).json({ error: "Failed to retrieve access token" });
-    }
-  };
-
-  getNewToken(oAuth2Client, res) {
-    const authUrl = oAuth2Client.generateAuthUrl({
-      access_type: "offline",
-      scope: this.SCOPES,
-    });
-    res.send(
-      `Authorize this app by visiting this url: <a href="${authUrl}" target="_blank">${authUrl}</a>`
-    );
-    // console.log('Authorize this app by visiting this url:', authUrl);
-    // const rl = require('readline').createInterface({
-    //   input: process.stdin,
-    //   output: process.stdout,
-    // });
-    // rl.question('Enter the code from that page here: ', (code) => {
-    //   rl.close();
-    //   oAuth2Client.getToken(code, (err, token) => {
-    //     if (err) return console.error('Error retrieving access token', err);
-    //     oAuth2Client.setCredentials(token);
-    //     fs.writeFileSync(this.TOKEN_PATH, JSON.stringify(token));
-    //     this.auth = oAuth2Client;
-    //   });
-    // });
   }
 
   appendData = async (req, res) => {
@@ -120,9 +21,9 @@ class GoogleService {
         message: "Email already existed",
       });
     }
-    this.authorize(req, res);
+    await this.baseAuth.authorize(req, res);
     const data = [[values.name, values.email, values.password]];
-    const sheets = google.sheets({ version: "v4", auth: this.auth });
+    const sheets = google.sheets({ version: "v4", auth: this.baseAuth.auth });
     const request = {
       spreadsheetId: this.spreadsheetId,
       range: "Sheet1!A1:D1",
@@ -141,7 +42,7 @@ class GoogleService {
   };
   editData = async (req, res) => {
     const { values, rowIndex } = req.body;
-    this.authorize(req, res);
+    await this.baseAuth.authorize(req, res);
     if (!values.email) {
       return res.json({
         success: false,
@@ -150,7 +51,7 @@ class GoogleService {
     }
     const data = [[values.name, values.email, values.password]];
 
-    const sheets = google.sheets({ version: "v4", auth: this.auth });
+    const sheets = google.sheets({ version: "v4", auth: this.baseAuth.auth });
     const request = {
       spreadsheetId: this.spreadsheetId,
       range: `Sheet1!A${rowIndex}:C${rowIndex}`,
@@ -174,7 +75,7 @@ class GoogleService {
 
   fetchData = async (req, res) => {
     const { range } = req.body;
-    const sheets = google.sheets({ version: "v4", auth: this.auth });
+    const sheets = google.sheets({ version: "v4", auth: this.baseAuth.auth });
     const spreadsheetId = "1FgDGAAL2PLAliyX3S2QcQuYdBKfmtTDqH8FX3IxKHQw";
 
     const request = {
@@ -233,14 +134,14 @@ class GoogleService {
 
   deleteDataSheet = async (req, res) => {
     const { rowIndex } = req.body;
-    await this.authorize(req, res);
+    await this.baseAuth.authorize(req, res);
     const row = await this.getSheetByRange(rowIndex);
     if (row.length === 0) {
       return res.status(400).json({
         success: false,
       });
     }
-    const sheets = google.sheets({ version: "v4", auth: this.auth });
+    const sheets = google.sheets({ version: "v4", auth: this.baseAuth.auth });
     const request = {
       spreadsheetId: this.spreadsheetId,
       resource: {
@@ -276,7 +177,7 @@ class GoogleService {
     }
   };
   getSheetByRange = async (rowIndex) => {
-    const sheets = google.sheets({ version: "v4", auth: this.auth });
+    const sheets = google.sheets({ version: "v4", auth: this.baseAuth.auth });
     const range = `Sheet1!A${rowIndex + 1}:Z${rowIndex + 1}`;
     try {
       const result = await sheets.spreadsheets.values.get({
@@ -293,8 +194,8 @@ class GoogleService {
   };
 
   getAllUserAvailableSpredSheet = async(req,res)=>{
-    await this.authorize();
-    const sheets = google.sheets({ version: 'v4', auth: this.auth });
+    await this.baseAuth.authorize();
+    const sheets = google.sheets({ version: 'v4', auth: this.baseAuth.auth });
       try {
         const response = await sheets.spreadsheets.get({
           spreadsheetId: this.spreadsheetId,
@@ -303,11 +204,29 @@ class GoogleService {
         const sheetDetails = response.data.sheets.map(sheet => ({
           title: sheet.properties.title,
           sheetId: sheet.properties.sheetId,
+          spreadSheetId:this.spreadsheetId
         }));
-  
+        if(Object.keys(sheetDetails).length > 0){
+           const savePromises = sheetDetails.map(async (sheet)=>{
+            const {title,sheetId,spreadSheetId} = sheet;
+            const checkExisting = await AvailableSheet.findOne({
+              sheetId:sheetId,
+              spreadSheetId:spreadSheetId
+            })
+            if(!checkExisting){
+                const availableSheet = new AvailableSheet({
+                  title:title,
+                  sheetId:sheetId,
+                  spreadSheetId:spreadSheetId
+              })
+            await availableSheet.save();
+            }
+           })
+           await Promise.all(savePromises);
+        }
         return res.status(200).json({
           success: true,
-          sheets: sheetDetails,
+          sheets: sheetDetails ? sheetDetails:[],
         });
       } catch (error) {
         console.log(error)
@@ -319,4 +238,4 @@ class GoogleService {
   }
 }
 
-module.exports = new GoogleService();
+module.exports = new GoogleServiceSpredSheetApi();
