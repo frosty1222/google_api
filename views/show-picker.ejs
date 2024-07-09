@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Picker api</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+        <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.3/html5shiv.js"></script>
+        <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+</head>
+<body>
+    <h1 class="text-center">Google Picker API Example</h1>
+    <button class="btn btn-success" onclick="createPicker()">
+        open picker
+    </button>
+    <div id="result"></div>
+    <div id="download-link"></div>
+    <div><button class="btn btn-success">Upload a file to your drive</button></div>
+
+    <!-- jQuery -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+    <!-- Bootstrap JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+    <script>
+        let tokenClient;
+        let accessToken = null;
+        let pickerInited = false;
+        let gisInited = false;
+
+        function onApiLoad() {
+            gapi.load('picker', onPickerApiLoad);
+        }
+
+        function onPickerApiLoad() {
+            pickerInited = true;
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: '643052924731-0rijpm91f3hvsi84plmlm4hmlmbt2n27.apps.googleusercontent.com',
+                scope: 'https://www.googleapis.com/auth/drive', // Example scope
+                callback: pickerCallback, // Define your token callback function
+            });
+            gisInited = true;
+        }
+
+        function createPicker() {
+            const showPicker = () => {
+                const picker = new google.picker.PickerBuilder()
+                    .addView(google.picker.ViewId.DOCS)
+                    .setOAuthToken(accessToken)
+                    .setDeveloperKey('AIzaSyDVMIS-2mPOe20R5hF7j9qOlSOyl5RIaD8') // Replace with your developer key
+                    .setAppId('arched-champion-428805-h7') // Replace with your app ID
+                    .setCallback(pickerCallback)
+                    .build();
+                picker.setVisible(true);
+            };
+
+            tokenClient.callback = async (response) => {
+                if (response.error !== undefined) {
+                    throw (response);
+                }
+                accessToken = response.access_token;
+                showPicker();
+            };
+
+            if (accessToken === null) {
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } else {
+                tokenClient.requestAccessToken({ prompt: '' });
+            }
+        }
+
+        function pickerCallback(data) {
+            let url = 'nothing';
+            let fileId = "";
+            let fileName = ""
+            if (data[google.picker.Response.ACTION] == google.picker.Action.PICKED) {
+                let doc = data[google.picker.Response.DOCUMENTS][0];
+                url = doc[google.picker.Document.URL];
+                fileId = doc[google.picker.Document.ID];
+                fileName = doc[google.picker.Document.NAME];
+            }
+            let message = `You picked: ${url}`;
+            document.getElementById('result').innerText = message;
+            if(fileId !== "" && fileName !==""){
+                fetchFileMetadata(fileId, fileName);
+            }
+        }
+        function fetchFileMetadata(fileId,fileName) {
+            document.getElementById('download-link').innerHTML = `<a href="${`/view/picker/download-picked-file/${fileId}`}" class="btn btn-success" >Download ${fileName}</a>`;
+         }
+    </script>
+    <!-- Google APIs -->
+    <script async defer src="https://apis.google.com/js/api.js" onload="onApiLoad()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+</body>
+</html>
