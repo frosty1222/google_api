@@ -231,16 +231,16 @@ class GoogleService {
     return true;
   };
 
-  deleteDataSheet = async (req,res)=>{
-    const {rowIndex} = req.body;
-    await this.authorize(req,res)
-    const row = await this.getSheetByRange(rowIndex)
-    if(row.length === 0){
+  deleteDataSheet = async (req, res) => {
+    const { rowIndex } = req.body;
+    await this.authorize(req, res);
+    const row = await this.getSheetByRange(rowIndex);
+    if (row.length === 0) {
       return res.status(400).json({
-        success:false
-      })
+        success: false,
+      });
     }
-    const sheets = google.sheets({ version: 'v4', auth: this.auth });
+    const sheets = google.sheets({ version: "v4", auth: this.auth });
     const request = {
       spreadsheetId: this.spreadsheetId,
       resource: {
@@ -249,7 +249,7 @@ class GoogleService {
             deleteDimension: {
               range: {
                 sheetId: this.sheetId,
-                dimension: 'ROWS',
+                dimension: "ROWS",
                 startIndex: rowIndex,
                 endIndex: rowIndex + 1,
               },
@@ -257,39 +257,65 @@ class GoogleService {
           },
         ],
       },
-    }
+    };
     try {
       const response = await sheets.spreadsheets.batchUpdate(request);
       if (response && response.data.replies.length > 0) {
         await User.deleteOne({ email: row[1] });
-    }
+      }
 
-    return res.status(201).json({
+      return res.status(201).json({
         success: true,
         length: response.data.replies.length,
-    });
+      });
     } catch (err) {
-      console.error('Error deleting row:', err);
+      console.error("Error deleting row:", err);
       return res.status(500).json({
-        success:false
-      })
+        success: false,
+      });
     }
-  }
-  getSheetByRange=async(rowIndex)=>{
-    const sheets = google.sheets({ version: 'v4', auth: this.auth });
+  };
+  getSheetByRange = async (rowIndex) => {
+    const sheets = google.sheets({ version: "v4", auth: this.auth });
     const range = `Sheet1!A${rowIndex + 1}:Z${rowIndex + 1}`;
     try {
       const result = await sheets.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
         range: range,
       });
-  
+
       const row = result.data.values ? result.data.values[0] : [];
       return row;
     } catch (err) {
-      console.error('Error backing up row:', err);
+      console.error("Error backing up row:", err);
       throw err;
     }
+  };
+
+  getAllUserAvailableSpredSheet = async(req,res)=>{
+    await this.authorize();
+    const sheets = google.sheets({ version: 'v4', auth: this.auth });
+      try {
+        const response = await sheets.spreadsheets.get({
+          spreadsheetId: this.spreadsheetId,
+        });
+  
+        const sheetDetails = response.data.sheets.map(sheet => ({
+          title: sheet.properties.title,
+          sheetId: sheet.properties.sheetId,
+        }));
+  
+        return res.status(200).json({
+          success: true,
+          sheets: sheetDetails,
+        });
+      } catch (error) {
+        console.log(error)
+        return res.status(500).json({
+          success:false,
+          files:null
+        })
+      }
   }
 }
 

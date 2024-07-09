@@ -8,4 +8,5 @@ router.put('/update-data-sheet',googleServiceController.editData)
 router.get('/authorize',googleServiceController.authorize)
 router.get('/callback',googleServiceController.callback)
 router.delete('/delete-data-sheet',googleServiceController.deleteDataSheet)
+router.get('/get-available-sheet',googleServiceController.getAllUserAvailableSpredSheet)
 module.exports = router;
